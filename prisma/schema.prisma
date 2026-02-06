@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  ENGINEER
+  CLIENT_USER
+}
+
+enum TicketStatus {
+  NEW
+  IN_PROGRESS
+  WAITING_FOR_CLIENT
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketSource {
+  WEB
+  EMAIL
+  PHONE
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  domain      String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+  tickets     Ticket[]
+  slaProfiles SLAProfile[]
+  categories  Category[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  companyId    String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  company      Company  @relation(fields: [companyId], references: [id])
+  requested    Ticket[] @relation("Requester")
+  assigned     Ticket[] @relation("Assignee")
+  comments     TicketComment[]
+  workLogs     WorkLog[]
+}
+
+model SLAProfile {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  priority    TicketPriority
+  responseMinutes  Int
+  resolutionMinutes Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id])
+  @@unique([companyId, priority])
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company  @relation(fields: [companyId], references: [id])
+  tickets   Ticket[]
+  @@index([companyId])
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  tickets   TicketTag[]
+}
+
+model TicketTag {
+  ticketId String
+  tagId    String
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+  tag      Tag    @relation(fields: [tagId], references: [id])
+  @@id([ticketId, tagId])
+}
+
+model Ticket {
+  id             String        @id @default(cuid())
+  companyId      String
+  requesterId    String
+  assigneeId     String?
+  title          String
+  description    String
+  categoryId     String?
+  priority       TicketPriority
+  status         TicketStatus
+  source         TicketSource
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  dueAt          DateTime
+  closedAt       DateTime?
+  lastActivityAt DateTime      @default(now())
+  company        Company       @relation(fields: [companyId], references: [id])
+  requester      User          @relation("Requester", fields: [requesterId], references: [id])
+  assignee       User?         @relation("Assignee", fields: [assigneeId], references: [id])
+  category       Category?     @relation(fields: [categoryId], references: [id])
+  comments       TicketComment[]
+  workLogs       WorkLog[]
+  attachments    Attachment[]
+  tags           TicketTag[]
+  statusHistory  TicketStatusHistory[]
+  @@index([companyId, status])
+  @@index([assigneeId])
+  @@index([priority])
+}
+
+model TicketStatusHistory {
+  id        String       @id @default(cuid())
+  ticketId  String
+  status    TicketStatus
+  createdAt DateTime     @default(now())
+  ticket    Ticket       @relation(fields: [ticketId], references: [id])
+  @@index([ticketId])
+}
+
+model TicketComment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  author    User     @relation(fields: [authorId], references: [id])
+}
+
+model WorkLog {
+  id         String   @id @default(cuid())
+  ticketId   String
+  engineerId String
+  minutes    Int
+  note       String?
+  createdAt  DateTime @default(now())
+  ticket     Ticket   @relation(fields: [ticketId], references: [id])
+  engineer   User     @relation(fields: [engineerId], references: [id])
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  uploaderId String
+  filename  String
+  url       String
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  uploader  User     @relation(fields: [uploaderId], references: [id])
+}
